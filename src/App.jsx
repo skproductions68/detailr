@@ -1,8 +1,8 @@
 // App.jsx — root shell
 // Welcome screen (default) → sidebar nav → routes to Book, Track, Admin
-// Admin is password-gated against shop_settings.admin_password.
+// Admin is gated by Supabase Auth (per-staff email/password login).
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X, ArrowRight, Home, Calendar, Search, Lock, Shield } from "lucide-react";
 import { supabase } from "./supabase";
 import { useShopData } from "./useShopData";
@@ -139,17 +139,22 @@ const Sidebar = ({ open, onClose, view, onNavigate, shopName }) => {
 // ADMIN PASSWORD GATE
 // ═══════════════════════════════════════════════════════════
 
-const AdminGate = ({ expectedPassword, onSuccess, onCancel }) => {
+const AdminLogin = ({ onCancel }) => {
+  const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const submit = () => {
-    if (pw === expectedPassword) {
-      onSuccess();
-    } else {
-      setError(true);
-      setTimeout(() => setError(false), 1500);
+  const submit = async () => {
+    if (!email || !pw) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
+    setBusy(false);
+    if (error) {
+      setError(error.message || "Sign-in failed");
     }
+    // On success, the App's auth listener flips to the admin view automatically.
   };
 
   return (
@@ -161,24 +166,35 @@ const AdminGate = ({ expectedPassword, onSuccess, onCancel }) => {
         <span className="absolute -bottom-1 -right-1 w-3 h-3 border-b border-r border-white" />
 
         <div className="flex items-center gap-2 text-[10px] font-mono text-gray-500 tracking-widest mb-2">
-          <Lock size={11} /> RESTRICTED ACCESS
+          <Lock size={11} /> STAFF LOGIN
         </div>
         <h2 className="text-2xl text-white font-light mb-1">Studio Admin</h2>
-        <p className="text-gray-500 text-sm mb-8">Enter staff password to continue</p>
+        <p className="text-gray-500 text-sm mb-8">Sign in with your staff account</p>
 
+        <label className="text-[10px] uppercase text-gray-500 tracking-wider font-mono">Email</label>
+        <input
+          type="email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+          placeholder="you@studio.com"
+          className="w-full bg-black border-b border-white/20 focus:border-white text-white py-3 text-base focus:outline-none transition-colors mb-5"
+        />
+
+        <label className="text-[10px] uppercase text-gray-500 tracking-wider font-mono">Password</label>
         <input
           type="password"
-          autoFocus
           value={pw}
           onChange={(e) => setPw(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder="••••••••"
-          className={`w-full bg-black border-b text-white py-3 text-lg focus:outline-none transition-colors font-mono tracking-widest ${
+          className={`w-full bg-black border-b text-white py-3 text-base focus:outline-none transition-colors font-mono tracking-widest ${
             error ? "border-red-500" : "border-white/20 focus:border-white"
           }`}
         />
         {error && (
-          <p className="text-red-500 text-xs mt-2 font-mono uppercase tracking-wider">✕ Invalid password</p>
+          <p className="text-red-500 text-xs mt-2 font-mono uppercase tracking-wider">✕ {error}</p>
         )}
 
         <div className="flex gap-2 mt-8">
@@ -190,9 +206,10 @@ const AdminGate = ({ expectedPassword, onSuccess, onCancel }) => {
           </button>
           <button
             onClick={submit}
-            className="flex-1 px-6 py-3 text-sm uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-all font-bold"
+            disabled={busy}
+            className="flex-1 px-6 py-3 text-sm uppercase tracking-wider bg-white text-black hover:bg-gray-200 transition-all font-bold disabled:opacity-50"
           >
-            Unlock
+            {busy ? "Signing in…" : "Sign In"}
           </button>
         </div>
       </div>
@@ -209,13 +226,30 @@ export default function App() {
 
   const [view, setView] = useState("home"); // home | book | track | admin
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [session, setSession] = useState(null);
   const [adminPrompt, setAdminPrompt] = useState(false);
 
-  // Navigation handler — intercepts admin to prompt for password
+  // Track the Supabase auth session (per-staff login)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+      if (sess) {
+        // Signed in → close the login modal and open admin
+        setAdminPrompt(false);
+        setView("admin");
+      } else {
+        // Signed out or session expired → leave admin
+        setView((v) => (v === "admin" ? "home" : v));
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Navigation handler — admin requires an authenticated session
   const navigate = (key) => {
     if (key === "admin") {
-      if (adminUnlocked) {
+      if (session) {
         setView("admin");
       } else {
         setAdminPrompt(true);
@@ -223,6 +257,12 @@ export default function App() {
       return;
     }
     setView(key);
+  };
+
+  const lockAdmin = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setView("home");
   };
 
   // Booking submit — write to bookings table
@@ -327,12 +367,8 @@ export default function App() {
         shopName={shop.settings?.shop_name}
       />
 
-      {adminPrompt && (
-        <AdminGate
-          expectedPassword={shop.settings?.admin_password || "changeme"}
-          onSuccess={() => { setAdminUnlocked(true); setAdminPrompt(false); setView("admin"); }}
-          onCancel={() => setAdminPrompt(false)}
-        />
+      {adminPrompt && !session && (
+        <AdminLogin onCancel={() => setAdminPrompt(false)} />
       )}
 
       {/* Views */}
@@ -356,10 +392,10 @@ export default function App() {
           stages={shop.stages}
         />
       )}
-      {view === "admin" && adminUnlocked && (
+      {view === "admin" && session && (
         <AdminPanel
           shop={shop}
-          onLock={() => { setAdminUnlocked(false); setView("home"); }}
+          onLock={lockAdmin}
         />
       )}
     </div>

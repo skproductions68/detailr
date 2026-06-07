@@ -681,7 +681,6 @@ const SettingsTab = ({ settings }) => {
         currency: edit.currency,
         bay_limit: edit.bay_limit,
         size_multipliers: edit.size_multipliers,
-        admin_password: edit.admin_password,
         updated_at: new Date().toISOString(),
       })
       .eq("id", 1);
@@ -767,12 +766,13 @@ const SettingsTab = ({ settings }) => {
       </div>
 
       <div className="border border-white/10 p-5 mb-5">
-        <h4 className="text-white text-sm uppercase tracking-wider mb-4">Admin Password</h4>
-        <Field label="Password (used to unlock this admin panel)">
-          <TextInput type="text" value={edit.admin_password || ""} onChange={(e) => setEdit({ ...edit, admin_password: e.target.value })} />
-        </Field>
-        <p className="text-[10px] text-yellow-600/80 font-mono uppercase tracking-wider mt-2">
-          ⚠ Stored plain-text in DB. OK for single-shop dev. Replace with hashed auth before publishing.
+        <h4 className="text-white text-sm uppercase tracking-wider mb-4">Staff Access</h4>
+        <p className="text-gray-400 text-sm">
+          Admin access uses secure staff logins (email + password). Each staff member signs in with their own account.
+        </p>
+        <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
+          To add or remove staff: open your Supabase dashboard → <span className="text-gray-300 font-mono">Authentication → Users</span> →
+          <span className="text-gray-300"> "Add user"</span>. Passwords are stored securely (hashed) by Supabase and can be reset there.
         </p>
       </div>
 
