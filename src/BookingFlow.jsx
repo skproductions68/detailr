@@ -28,7 +28,7 @@ const Card = ({ children, className = "", onClick, selected }) => (
     className={`p-6 rounded-none border transition-all duration-300 ${
       selected
         ? "bg-white text-black border-white shadow-[0_0_28px_rgba(255,255,255,0.14)]"
-        : "bg-black text-gray-300 border-white/10 hover:border-white/30 hover:bg-white/5 hover:-translate-y-0.5"
+        : "glass text-gray-300 hover:border-white/30 hover:bg-white/5 hover:-translate-y-0.5"
     } ${className}`}
   >
     {children}
@@ -185,6 +185,7 @@ export default function BookingFlow({ shop, onSubmit }) {
   const vehicleDB = useMemo(() => groupVehicles(vehicles), [vehicles]);
 
   const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
   const [carView, setCarView] = useState("3d"); // "3d" | "2d"
   const [form, setForm] = useState({
     customer: { name: "", phone: "" },
@@ -251,7 +252,7 @@ export default function BookingFlow({ shop, onSubmit }) {
       {/* Header */}
       <div className="flex justify-between items-end mb-12">
         <div>
-          <h1 className="text-3xl font-light text-white mb-1">Book a Studio Session</h1>
+          <h1 className="display text-3xl text-white mb-1">BOOK A STUDIO SESSION</h1>
           <p className="text-gray-500 text-[11px] tracking-widest uppercase">
             {settings?.tagline || "Paint Protection Film"}
           </p>
@@ -297,7 +298,7 @@ export default function BookingFlow({ shop, onSubmit }) {
                 onChange={(e) => setVehicleField("year", e.target.value)}
                 type="number"
                 placeholder="YYYY"
-                className="w-full bg-black border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors text-lg"
+                className="w-full bg-transparent border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors text-lg"
               />
             </div>
             <div className="space-y-2">
@@ -306,7 +307,7 @@ export default function BookingFlow({ shop, onSubmit }) {
                 value={form.vehicle.reg}
                 onChange={(e) => setVehicleField("reg", e.target.value.toUpperCase())}
                 placeholder="ABC-123"
-                className="w-full bg-black border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors text-lg uppercase font-mono"
+                className="w-full bg-transparent border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors text-lg uppercase font-mono"
               />
             </div>
           </div>
@@ -340,7 +341,7 @@ export default function BookingFlow({ shop, onSubmit }) {
           ) : (
             <>
               {/* Spec table */}
-              <div className="overflow-x-auto mb-8 border border-white/8">
+              <div className="overflow-x-auto mb-8 glass">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-white/5">
                     <tr>
@@ -538,7 +539,7 @@ export default function BookingFlow({ shop, onSubmit }) {
         <div>
           <h2 className="text-lg text-white mb-6 font-light">Confirm Reservation</h2>
 
-          <div className="border border-white/10 bg-white/[0.02] p-8 mb-6">
+          <div className="glass p-6 sm:p-8 mb-6">
             {/* Vehicle + date */}
             <div className="flex flex-col md:flex-row justify-between gap-6 pb-8 border-b border-white/8 mb-8">
               <div>
@@ -577,7 +578,7 @@ export default function BookingFlow({ shop, onSubmit }) {
                   value={form.customer.name}
                   onChange={(e) => setForm({ ...form, customer: { ...form.customer, name: e.target.value } })}
                   placeholder="Your name"
-                  className="w-full bg-black border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors placeholder-gray-700"
+                  className="w-full bg-transparent border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors placeholder-gray-700"
                 />
               </div>
               <div className="space-y-2">
@@ -588,13 +589,13 @@ export default function BookingFlow({ shop, onSubmit }) {
                   value={form.customer.phone}
                   onChange={(e) => setForm({ ...form, customer: { ...form.customer, phone: e.target.value } })}
                   placeholder="03XX-XXXXXXX"
-                  className="w-full bg-black border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors font-mono placeholder-gray-700"
+                  className="w-full bg-transparent border-b border-white/20 text-white py-3 focus:outline-none focus:border-white transition-colors font-mono placeholder-gray-700"
                 />
               </div>
             </div>
 
             {/* Pricing */}
-            <div className="bg-black border border-white/8 p-5 mb-8">
+            <div className="bg-black/40 border border-white/8 p-5 mb-8">
               <h4 className="text-white text-[11px] uppercase tracking-wider mb-4 flex items-center gap-1.5">
                 <Info size={12} /> Pricing Summary
               </h4>
@@ -643,8 +644,18 @@ export default function BookingFlow({ shop, onSubmit }) {
 
           <div className="flex justify-between">
             <Btn onClick={() => setStep(3)}>← Back</Btn>
-            <Btn primary danger={isFull} disabled={!canSubmit} onClick={() => canSubmit && onSubmit(form)}>
-              {isFull ? "Fully Booked" : "Confirm Booking"}
+            <Btn
+              primary
+              danger={isFull}
+              disabled={!canSubmit || submitting}
+              onClick={async () => {
+                if (!canSubmit || submitting) return;
+                setSubmitting(true);
+                await onSubmit(form);
+                setSubmitting(false);
+              }}
+            >
+              {isFull ? "Fully Booked" : submitting ? "Confirming…" : "Confirm Booking"}
             </Btn>
           </div>
         </div>

@@ -3,14 +3,15 @@
 // admin-configurable table — vehicles, packages, addons, stages,
 // panels, and shop settings.
 
-import { useState, useMemo, lazy, Suspense } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import {
   LogOut, Droplets, Wind, Sparkles, Trash2, Plus, Save, X, ArrowUp, ArrowDown,
   Car, Package, Tag, ListOrdered, Layers, SlidersHorizontal, LayoutGrid, Settings as Cog,
-  CalendarDays, ChevronLeft, ChevronRight,
+  CalendarDays, ChevronLeft, ChevronRight, Camera, ImagePlus, Loader2,
 } from "lucide-react";
 import { supabase } from "./supabase";
 import { formatMoney, CURRENCIES } from "./currency";
+import { toast, Lightbox } from "./fx";
 const Car3D = lazy(() => import("./Car3D"));
 
 // ── Small UI primitives ────────────────────────────────────
@@ -82,13 +83,13 @@ const PipelineTab = ({ bookings, stages, packages, settings }) => {
 
   const moveBooking = async (id, newStatus) => {
     const { error } = await supabase.from("bookings").update({ status: newStatus }).eq("id", id);
-    if (error) alert("Failed to update: " + error.message);
+    if (error) toast("Failed to update: " + error.message, "err");
   };
 
   const deleteBooking = async (id) => {
     if (!confirm("Delete this booking? This cannot be undone.")) return;
     const { error } = await supabase.from("bookings").delete().eq("id", id);
-    if (error) alert("Failed to delete: " + error.message);
+    if (error) toast("Failed to delete: " + error.message, "err");
   };
 
   return (
@@ -177,7 +178,7 @@ const CreditsTab = ({ bookings, packages }) => {
     const newVal = Math.max(0, (currentCredits[type] || 0) + delta);
     const newCredits = { ...currentCredits, [type]: newVal };
     const { error } = await supabase.from("bookings").update({ credits: newCredits }).eq("id", id);
-    if (error) alert("Failed: " + error.message);
+    if (error) toast("Failed: " + error.message, "err");
   };
 
   if (bookings.length === 0) {
@@ -242,18 +243,18 @@ const VehiclesTab = ({ vehicles, settings }) => {
   const add = async () => {
     if (!draft.make || !draft.model) return;
     const { error } = await supabase.from("vehicles").insert(draft);
-    if (error) alert(error.message); else setDraft({ make: "", model: "", size: "Sedan", body_type: "sedan" });
+    if (error) toast(error.message, "err"); else setDraft({ make: "", model: "", size: "Sedan", body_type: "sedan" });
   };
 
   const update = async (id, patch) => {
     const { error } = await supabase.from("vehicles").update(patch).eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   const remove = async (id) => {
     if (!confirm("Remove this vehicle from the catalogue?")) return;
     const { error } = await supabase.from("vehicles").delete().eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   const selectCls = "w-full bg-black border border-white/15 text-white px-3 py-2 text-sm focus:outline-none focus:border-white capitalize";
@@ -418,13 +419,13 @@ const PackagesTab = ({ packages, currency }) => {
   const save = async (id, patch) => {
     // If id changed, that's an insert+delete dance. Keep simple: only allow id change on create.
     const { error } = await supabase.from("packages").update(patch).eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   const create = async () => {
-    if (!draft.id || !draft.name) { alert("ID and name are required."); return; }
+    if (!draft.id || !draft.name) { toast("ID and name are required.", "err"); return; }
     const { error } = await supabase.from("packages").insert(draft);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
     else {
       setDraft({ id: "", brand: "", name: "", base_price: 0, microns: 150, material: "TPU", durability: "", warranty: "", features: [], ratings: {}, credits: {} });
       setShowNew(false);
@@ -434,7 +435,7 @@ const PackagesTab = ({ packages, currency }) => {
   const remove = async (id) => {
     if (!confirm("Delete this package? Existing bookings using it will keep their data but won't render the package details.")) return;
     const { error } = await supabase.from("packages").delete().eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   return (
@@ -477,18 +478,18 @@ const AddonsTab = ({ addons, currency }) => {
   const add = async () => {
     if (!draft.id || !draft.name) return;
     const { error } = await supabase.from("addons").insert(draft);
-    if (error) alert(error.message); else setDraft({ id: "", name: "", price: 0 });
+    if (error) toast(error.message, "err"); else setDraft({ id: "", name: "", price: 0 });
   };
 
   const update = async (id, patch) => {
     const { error } = await supabase.from("addons").update(patch).eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   const remove = async (id) => {
     if (!confirm("Remove this add-on?")) return;
     const { error } = await supabase.from("addons").delete().eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   return (
@@ -548,18 +549,18 @@ const StagesTab = ({ stages }) => {
     if (!draft.name) return;
     const nextOrder = (stages[stages.length - 1]?.sort_order || 0) + 1;
     const { error } = await supabase.from("stages").insert({ ...draft, sort_order: nextOrder });
-    if (error) alert(error.message); else setDraft({ name: "", is_final: false });
+    if (error) toast(error.message, "err"); else setDraft({ name: "", is_final: false });
   };
 
   const update = async (id, patch) => {
     const { error } = await supabase.from("stages").update(patch).eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   const remove = async (id) => {
     if (!confirm("Delete this stage? Bookings with this stage will appear off-pipeline.")) return;
     const { error } = await supabase.from("stages").delete().eq("id", id);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
   };
 
   const move = async (idx, dir) => {
@@ -685,8 +686,8 @@ const SettingsTab = ({ settings }) => {
       })
       .eq("id", 1);
     setSaving(false);
-    if (error) alert(error.message);
-    else alert("Saved.");
+    if (error) toast(error.message, "err");
+    else toast("Settings saved");
   };
 
   const setMult = (key, val) => {
@@ -798,6 +799,110 @@ const ymd = (d) => {
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
+
+// Per-stage photo uploads — staff documents the car as it moves through
+// the pipeline; customers see these live on the tracking page.
+const PhotosSection = ({ booking, stages }) => {
+  const [photos, setPhotos] = useState([]);
+  const [stage, setStage] = useState(booking.status);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState(null);
+
+  const load = async () => {
+    const { data } = await supabase
+      .from("booking_photos")
+      .select("*")
+      .eq("booking_id", booking.id)
+      .order("created_at");
+    setPhotos(data || []);
+  };
+  useEffect(() => { load(); }, [booking.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const upload = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast("Please choose an image file", "err"); return; }
+    if (file.size > 8 * 1024 * 1024) { toast("Image too large (max 8 MB)", "err"); return; }
+    setUploading(true);
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${booking.id}/${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("stage-photos").upload(path, file, { contentType: file.type });
+    if (upErr) { setUploading(false); toast("Upload failed: " + upErr.message, "err"); return; }
+    const { data: pub } = supabase.storage.from("stage-photos").getPublicUrl(path);
+    const { error: dbErr } = await supabase.from("booking_photos").insert({
+      booking_id: booking.id, stage, url: pub.publicUrl, storage_path: path,
+    });
+    setUploading(false);
+    if (dbErr) { toast("Save failed: " + dbErr.message, "err"); return; }
+    toast(`Photo added to ${stage}`);
+    load();
+  };
+
+  const removePhoto = async (p) => {
+    if (!confirm("Delete this photo?")) return;
+    await supabase.storage.from("stage-photos").remove([p.storage_path]);
+    const { error } = await supabase.from("booking_photos").delete().eq("id", p.id);
+    if (error) toast(error.message, "err");
+    else { toast("Photo deleted"); load(); }
+  };
+
+  return (
+    <div className="mt-6 pt-5 border-t border-white/10">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[10px] font-mono text-gray-600 tracking-widest uppercase flex items-center gap-1.5">
+          <Camera size={11} /> Stage Photos · {photos.length}
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={stage}
+            onChange={(e) => setStage(e.target.value)}
+            className="bg-black border border-white/15 text-white px-2 py-1.5 text-xs focus:outline-none focus:border-white"
+          >
+            {stages.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+          <label className={`flex items-center gap-1.5 px-3 py-1.5 text-xs uppercase tracking-wider cursor-pointer transition-all ${
+            uploading ? "bg-white/10 text-gray-500" : "bg-white text-black hover:bg-gray-200"
+          }`}>
+            {uploading ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}
+            {uploading ? "Uploading…" : "Add Photo"}
+            <input
+              type="file" accept="image/*" capture="environment" className="hidden"
+              disabled={uploading}
+              onChange={(e) => { upload(e.target.files?.[0]); e.target.value = ""; }}
+            />
+          </label>
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-600 mb-3">
+        Photos appear instantly on the customer's tracking page under the selected stage.
+      </p>
+      {photos.length > 0 && (
+        <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+          {photos.map((p) => (
+            <div key={p.id} className="relative group aspect-square border border-white/10 overflow-hidden">
+              <img
+                src={p.url} alt={p.stage} loading="lazy"
+                className="w-full h-full object-cover cursor-pointer"
+                onClick={() => setPreview(p)}
+              />
+              <button
+                onClick={() => removePhoto(p)}
+                className="absolute top-1 right-1 p-1 bg-black/70 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Delete photo"
+              >
+                <Trash2 size={11} />
+              </button>
+              <div className="absolute bottom-0 inset-x-0 bg-black/70 px-1 py-0.5 text-[8px] font-mono text-gray-400 truncate">
+                {p.stage}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Lightbox photo={preview} onClose={() => setPreview(null)} />
+    </div>
+  );
+};
+
 // Edit modal for a single booking
 const BookingEditor = ({ booking, stages, packages, panels = [], vehicles = [], onClose }) => {
   const [edit, setEdit] = useState(booking);
@@ -837,14 +942,14 @@ const BookingEditor = ({ booking, stages, packages, panels = [], vehicles = [], 
       })
       .eq("id", booking.id);
     setSaving(false);
-    if (error) alert(error.message);
+    if (error) toast(error.message, "err");
     else onClose();
   };
 
   const remove = async () => {
     if (!confirm("Delete this booking permanently?")) return;
     const { error } = await supabase.from("bookings").delete().eq("id", booking.id);
-    if (error) alert(error.message); else onClose();
+    if (error) toast(error.message, "err"); else onClose();
   };
 
   const pkg = packages.find((p) => p.id === edit.package_id);
@@ -930,6 +1035,8 @@ const BookingEditor = ({ booking, stages, packages, panels = [], vehicles = [], 
             ))}
           </div>
         </div>
+
+        <PhotosSection booking={booking} stages={stages} />
 
         <div className="flex justify-between mt-6 pt-5 border-t border-white/10">
           <Btn danger icon={Trash2} onClick={remove}>Delete</Btn>
